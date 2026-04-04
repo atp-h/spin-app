@@ -1,0 +1,19 @@
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        - REACT_APP_API_URL=http://localhost:5000
+    network_mode: host
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    network_mode: host
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    restart: unless-stopped
