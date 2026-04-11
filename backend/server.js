@@ -14,7 +14,15 @@ db.exec(`
     name TEXT NOT NULL,
     items TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
+  );
+
+  CREATE TABLE IF NOT EXISTS spins (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    wheel_id INTEGER NOT NULL,
+    item TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (wheel_id) REFERENCES wheels (id) ON DELETE CASCADE
+  );
 `);
 
 app.use(cors());
@@ -87,6 +95,45 @@ app.delete('/api/wheels/:id', (req, res) => {
       return res.status(404).json({ error: 'Wheel not found' });
     }
     res.json({ message: 'Wheel deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Spin API
+app.post('/api/spins', (req, res) => {
+  try {
+    const { wheel_id, item } = req.body;
+    if (!wheel_id || !item) {
+      return res.status(400).json({ error: 'wheel_id and item are required' });
+    }
+    const stmt = db.prepare('INSERT INTO spins (wheel_id, item) VALUES (?, ?)');
+    const result = stmt.run(wheel_id, item);
+    res.json({ id: result.lastInsertRowid, wheel_id, item });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/wheels/:id/history', (req, res) => {
+  try {
+    const history = db.prepare('SELECT * FROM spins WHERE wheel_id = ? ORDER BY created_at DESC LIMIT 20').all(req.params.id);
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/wheels/:id/leaderboard', (req, res) => {
+  try {
+    const leaderboard = db.prepare(`
+      SELECT item, COUNT(*) as wins 
+      FROM spins 
+      WHERE wheel_id = ? 
+      GROUP BY item 
+      ORDER BY wins DESC
+    `).all(req.params.id);
+    res.json(leaderboard);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

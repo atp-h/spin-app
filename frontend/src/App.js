@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import SpinWheel from './components/SpinWheel';
 import ItemList from './components/ItemList';
+import Scoreboard from './components/Scoreboard';
 
 let API_BASE_URL = process.env.REACT_APP_API_URL || '';
 if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
@@ -19,18 +20,41 @@ function App() {
   const [wheelName, setWheelName] = useState('');
   const [newItem, setNewItem] = useState('');
   const [editingWheel, setEditingWheel] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [leaderboard, setLeaderboard] = useState([]);
 
   useEffect(() => {
     fetchWheels();
   }, []);
+
+  const fetchScoreboard = useCallback(async (wheelId) => {
+    if (!wheelId) return;
+    try {
+      const [historyRes, leaderboardRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/wheels/${wheelId}/history`),
+        axios.get(`${API_BASE_URL}/api/wheels/${wheelId}/leaderboard`)
+      ]);
+      setHistory(historyRes.data);
+      setLeaderboard(leaderboardRes.data);
+    } catch (error) {
+      console.error('Error fetching scoreboard:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentWheel) {
+      fetchScoreboard(currentWheel.id);
+    }
+  }, [currentWheel, fetchScoreboard]);
 
   const fetchWheels = async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/wheels`);
       setWheels(res.data);
       if (res.data.length > 0 && !currentWheel) {
-        setCurrentWheel(res.data[0]);
-        setWheelName(res.data[0].name);
+        const firstWheel = res.data[0];
+        setCurrentWheel(firstWheel);
+        setWheelName(firstWheel.name);
       }
     } catch (error) {
       console.error('Error fetching wheels:', error);
@@ -47,6 +71,8 @@ function App() {
       setWheels([res.data, ...wheels]);
       setCurrentWheel(res.data);
       setEditingWheel(res.data.id);
+      setHistory([]);
+      setLeaderboard([]);
     } catch (error) {
       console.error('Error creating wheel:', error);
     }
@@ -70,8 +96,11 @@ function App() {
       const newWheels = wheels.filter(w => w.id !== id);
       setWheels(newWheels);
       if (currentWheel?.id === id) {
-        setCurrentWheel(newWheels[0] || null);
-        setWheelName(newWheels[0]?.name || '');
+        const nextWheel = newWheels[0] || null;
+        setCurrentWheel(nextWheel);
+        setWheelName(nextWheel?.name || '');
+        setHistory([]);
+        setLeaderboard([]);
       }
     } catch (error) {
       console.error('Error deleting wheel:', error);
@@ -98,8 +127,19 @@ function App() {
     handleUpdateWheel(currentWheel.id, currentWheel.name, updatedItems);
   };
 
-  const handleSpinResult = (result) => {
+  const handleSpinResult = async (result) => {
     setSelectedResult(result);
+    if (currentWheel) {
+      try {
+        await axios.post(`${API_BASE_URL}/api/spins`, {
+          wheel_id: currentWheel.id,
+          item: result
+        });
+        fetchScoreboard(currentWheel.id);
+      } catch (error) {
+        console.error('Error saving spin result:', error);
+      }
+    }
   };
 
   const selectWheel = (wheel) => {
@@ -185,6 +225,8 @@ function App() {
                 newItem={newItem}
                 setNewItem={setNewItem}
               />
+
+              <Scoreboard history={history} leaderboard={leaderboard} />
             </>
           ) : (
             <div className="no-wheel">

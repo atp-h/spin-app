@@ -48,9 +48,9 @@ body {
 }
 
 .sidebar {
-  width: 240px;
+  width: 280px;
   background: rgba(0, 0, 0, 0.25);
-  padding: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
@@ -60,13 +60,14 @@ body {
 .wheel-list-header h2 {
   font-size: 0.9rem;
   color: #a0aec0;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 
 .wheel-list {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  margin-bottom: 12px;
 }
 
 .wheel-item {
@@ -102,19 +103,22 @@ body {
 }
 
 .create-wheel {
-  margin-top: 8px;
+  margin-top: auto;
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .create-wheel input {
   flex: 1;
+  min-width: 0;
   padding: 10px 12px;
   border: none;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   min-height: 44px;
 }
 
@@ -123,20 +127,21 @@ body {
 }
 
 .create-wheel button {
-  padding: 10px 16px;
+  flex-shrink: 0;
+  padding: 10px 14px;
   border: none;
   border-radius: 8px;
   background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
   color: #fff;
   font-weight: 600;
+  font-size: 14px;
   cursor: pointer;
   min-height: 44px;
-  min-width: 70px;
 }
 
 .content {
   flex: 1;
-  padding: 16px;
+  padding: 24px 16px;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -345,6 +350,87 @@ body {
   font-size: 1rem;
   text-align: center;
   padding: 20px;
+}
+
+/* Scoreboard Styles */
+.scoreboard {
+  width: 100%;
+  max-width: 400px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-top: 24px;
+  margin-bottom: 40px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.scoreboard-section h3 {
+  font-size: 1rem;
+  color: #f093fb;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 8px;
+}
+
+.leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.leaderboard-table th {
+  text-align: left;
+  font-size: 0.8rem;
+  color: #a0aec0;
+  padding: 8px;
+}
+
+.leaderboard-table td {
+  padding: 8px;
+  font-size: 0.95rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.leaderboard-table tr:last-child td {
+  border-bottom: none;
+}
+
+.history-list {
+  list-style: none;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.history-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.history-list li:last-child {
+  border-bottom: none;
+}
+
+.history-item {
+  font-weight: 500;
+  color: #fff;
+}
+
+.history-time {
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.empty-msg {
+  color: #718096;
+  font-size: 0.9rem;
+  font-style: italic;
+  text-align: center;
+  padding: 12px;
 }
 
 @media (max-width: 768px) {
