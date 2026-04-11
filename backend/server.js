@@ -417,21 +417,60 @@ app.post('/api/teams/:id/delete', (req, res) => {
 
 app.delete('/api/matches/:id', (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM matches WHERE id = ?');
-    const result = stmt.run(req.params.id);
-    if (result.changes === 0) return res.status(404).json({ error: 'Match not found' });
-    res.json({ message: 'Match deleted' });
+    const transaction = db.transaction(() => {
+      const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
+      if (!match) return false;
+
+      // Decrement wins from winning team
+      db.prepare('UPDATE teams SET wins = MAX(0, wins - 1) WHERE id = ?').run(match.winner_id);
+      
+      // Decrement wins from winning players
+      db.prepare(`
+        UPDATE players 
+        SET wins = MAX(0, wins - 1) 
+        WHERE id IN (SELECT player_id FROM team_players WHERE team_id = ?)
+      `).run(match.winner_id);
+
+      db.prepare('DELETE FROM matches WHERE id = ?').run(req.params.id);
+      return true;
+    });
+
+    if (transaction()) {
+      res.json({ message: 'Match deleted and wins updated' });
+    } else {
+      res.status(404).json({ error: 'Match not found' });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// Post-based delete fallback
 app.post('/api/matches/:id/delete', (req, res) => {
   try {
-    const stmt = db.prepare('DELETE FROM matches WHERE id = ?');
-    const result = stmt.run(req.params.id);
-    if (result.changes === 0) return res.status(404).json({ error: 'Match not found' });
-    res.json({ message: 'Match deleted' });
+    const transaction = db.transaction(() => {
+      const match = db.prepare('SELECT * FROM matches WHERE id = ?').get(req.params.id);
+      if (!match) return false;
+
+      // Decrement wins from winning team
+      db.prepare('UPDATE teams SET wins = MAX(0, wins - 1) WHERE id = ?').run(match.winner_id);
+      
+      // Decrement wins from winning players
+      db.prepare(`
+        UPDATE players 
+        SET wins = MAX(0, wins - 1) 
+        WHERE id IN (SELECT player_id FROM team_players WHERE team_id = ?)
+      `).run(match.winner_id);
+
+      db.prepare('DELETE FROM matches WHERE id = ?').run(req.params.id);
+      return true;
+    });
+
+    if (transaction()) {
+      res.json({ message: 'Match deleted and wins updated' });
+    } else {
+      res.status(404).json({ error: 'Match not found' });
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
