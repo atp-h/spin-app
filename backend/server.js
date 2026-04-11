@@ -138,6 +138,23 @@ app.put('/api/wheels/:id', (req, res) => {
   }
 });
 
+app.post('/api/wheels/:id/update', (req, res) => {
+  try {
+    const { name, items } = req.body;
+    if (!name || !items || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'Invalid request: name and items required' });
+    }
+    const stmt = db.prepare('UPDATE wheels SET name = ?, items = ? WHERE id = ?');
+    const result = stmt.run(name, JSON.stringify(items), req.params.id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Wheel not found' });
+    }
+    res.json({ id: parseInt(req.params.id), name, items });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/api/wheels/:id', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM wheels WHERE id = ?');

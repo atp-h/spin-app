@@ -7,12 +7,12 @@ import BeerpongScoreboard from './components/BeerpongScoreboard';
 import Manual from './components/Manual';
 
 let API_BASE_URL = process.env.REACT_APP_API_URL || '';
+
+// Forceer relatieve paden op publieke URL's om 'localhost' hardcoding uit de build te negeren
 if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-  if (window.location.port === '' || window.location.port === '80' || window.location.port === '443') {
-    API_BASE_URL = ''; // Rely on reverse proxy routing (HAProxy)
-  } else {
-    API_BASE_URL = API_BASE_URL.replace('localhost', window.location.hostname); // Direct IP access
-  }
+  API_BASE_URL = ''; 
+} else if (!API_BASE_URL) {
+  API_BASE_URL = 'http://localhost:5000';
 }
 
 function App() {
@@ -85,7 +85,7 @@ function App() {
 
   const handleUpdateWheel = async (id, name, items) => {
     try {
-      const res = await axios.put(`${API_BASE_URL}/api/wheels/${id}`, { name, items });
+      const res = await axios.post(`${API_BASE_URL}/api/wheels/${id}/update`, { name, items });
       setWheels(wheels.map(w => w.id === id ? res.data : w));
       if (currentWheel?.id === id) {
         setCurrentWheel(res.data);
