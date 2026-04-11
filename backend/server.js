@@ -23,6 +23,57 @@ db.exec(`
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (wheel_id) REFERENCES wheels (id) ON DELETE CASCADE
   );
+
+  CREATE TABLE IF NOT EXISTS players (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    wins INTEGER DEFAULT 0,
+    is_present INTEGER DEFAULT 1,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Migration: Add is_present column if it doesn't exist
+try {
+  db.prepare("ALTER TABLE players ADD COLUMN is_present INTEGER DEFAULT 1").run();
+} catch (e) {
+  // Column already exists, ignore error
+}
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS teams (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    wins INTEGER DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS team_players (
+    team_id INTEGER,
+    player_id INTEGER,
+    PRIMARY KEY (team_id, player_id),
+    FOREIGN KEY (team_id) REFERENCES teams (id) ON DELETE CASCADE,
+    FOREIGN KEY (player_id) REFERENCES players (id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    team_a_id INTEGER,
+    team_b_id INTEGER,
+    score_a INTEGER,
+    score_b INTEGER,
+    winner_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (team_a_id) REFERENCES teams (id),
+    FOREIGN KEY (team_b_id) REFERENCES teams (id),
+    FOREIGN KEY (winner_id) REFERENCES teams (id)
+  );
+
+  -- Optimization Indexes
+  CREATE INDEX IF NOT EXISTS idx_spins_wheel_id ON spins(wheel_id);
+  CREATE INDEX IF NOT EXISTS idx_matches_winner_id ON matches(winner_id);
+  CREATE INDEX IF NOT EXISTS idx_team_players_team_id ON team_players(team_id);
+  CREATE INDEX IF NOT EXISTS idx_team_players_player_id ON team_players(player_id);
 `);
 
 app.use(cors());
@@ -134,6 +185,173 @@ app.get('/api/wheels/:id/leaderboard', (req, res) => {
       ORDER BY wins DESC
     `).all(req.params.id);
     res.json(leaderboard);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Beerpong Leaderboard API
+app.get('/api/players', (req, res) => {
+  try {
+    const players = db.prepare('SELECT * FROM players ORDER BY wins DESC, name ASC').all();
+    res.json(players);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/players', (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const stmt = db.prepare('INSERT INTO players (name) VALUES (?)');
+    const result = stmt.run(name);
+    res.json({ id: result.lastInsertRowid, name, wins: 0 });
+  } catch (error) {
+    if (error.message.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ error: 'Player already exists' });
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/players/:id/win', (req, res) => {
+  try {
+    const stmt = db.prepare('UPDATE players SET wins = wins + 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Player not found' });
+    const player = db.prepare('SELECT * FROM players WHERE id = ?').get(req.params.id);
+    res.json(player);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/players/:id/toggle-presence', (req, res) => {
+  try {
+    const { is_present } = req.body;
+    const stmt = db.prepare('UPDATE players SET is_present = ? WHERE id = ?');
+    stmt.run(is_present ? 1 : 0, req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/players/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM players WHERE id = ?');
+    stmt.run(req.params.id);
+    res.json({ message: 'Player deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Teams API
+app.get('/api/teams', (req, res) => {
+  try {
+    const teams = db.prepare(`
+      SELECT t.*, GROUP_CONCAT(p.name, ', ') as members 
+      FROM teams t
+      JOIN team_players tp ON t.id = tp.team_id
+      JOIN players p ON tp.player_id = p.id
+      GROUP BY t.id
+      ORDER BY t.wins DESC, t.name ASC
+    `).all();
+    res.json(teams);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/teams', (req, res) => {
+  const { name, player_ids } = req.body;
+  if (!name || !player_ids || !player_ids.length) {
+    return res.status(400).json({ error: 'Name and players are required' });
+  }
+  
+  const transaction = db.transaction(() => {
+    const stmt = db.prepare('INSERT INTO teams (name) VALUES (?)');
+    const result = stmt.run(name);
+    const teamId = result.lastInsertRowid;
+    
+    const playerStmt = db.prepare('INSERT INTO team_players (team_id, player_id) VALUES (?, ?)');
+    for (const playerId of player_ids) {
+      playerStmt.run(teamId, playerId);
+    }
+    return teamId;
+  });
+
+  try {
+    const teamId = transaction();
+    res.json({ id: teamId, name, wins: 0 });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Matches API
+app.get('/api/matches', (req, res) => {
+  try {
+    const matches = db.prepare(`
+      SELECT m.*, ta.name as team_a_name, tb.name as team_b_name, w.name as winner_name
+      FROM matches m
+      JOIN teams ta ON m.team_a_id = ta.id
+      JOIN teams tb ON m.team_b_id = tb.id
+      JOIN teams w ON m.winner_id = w.id
+      ORDER BY m.created_at DESC
+      LIMIT 50
+    `).all();
+    res.json(matches);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/matches', (req, res) => {
+  const { team_a_id, team_b_id, score_a, score_b, winner_id } = req.body;
+  
+  const transaction = db.transaction(() => {
+    const stmt = db.prepare('INSERT INTO matches (team_a_id, team_b_id, score_a, score_b, winner_id) VALUES (?, ?, ?, ?, ?)');
+    stmt.run(team_a_id, team_b_id, score_a, score_b, winner_id);
+    
+    // Update team wins
+    db.prepare('UPDATE teams SET wins = wins + 1 WHERE id = ?').run(winner_id);
+    
+    // Update individual player wins in that team
+    db.prepare(`
+      UPDATE players 
+      SET wins = wins + 1 
+      WHERE id IN (SELECT player_id FROM team_players WHERE team_id = ?)
+    `).run(winner_id);
+  });
+
+  try {
+    transaction();
+    res.json({ message: 'Match recorded' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/teams/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM teams WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Team not found' });
+    res.json({ message: 'Team deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/matches/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM matches WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Match not found' });
+    res.json({ message: 'Match deleted' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

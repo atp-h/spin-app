@@ -3,6 +3,7 @@ import axios from 'axios';
 import SpinWheel from './components/SpinWheel';
 import ItemList from './components/ItemList';
 import Scoreboard from './components/Scoreboard';
+import BeerpongScoreboard from './components/BeerpongScoreboard';
 
 let API_BASE_URL = process.env.REACT_APP_API_URL || '';
 if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
@@ -22,6 +23,7 @@ function App() {
   const [editingWheel, setEditingWheel] = useState(null);
   const [history, setHistory] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
+  const [activeTab, setActiveTab] = useState('wheel'); // 'wheel' or 'beerpong'
 
   useEffect(() => {
     fetchWheels();
@@ -185,53 +187,72 @@ function App() {
         </aside>
 
         <main className="content">
-          {currentWheel ? (
-            <>
-              <div className="wheel-header">
-                <h2>{currentWheel.name}</h2>
-                {editingWheel !== currentWheel.id && (
-                  <button className="edit-btn" onClick={() => setEditingWheel(currentWheel.id)}>
-                    Edit
+          <div className="app-tabs">
+            <button 
+              className={`tab-btn ${activeTab === 'wheel' ? 'active' : ''}`}
+              onClick={() => setActiveTab('wheel')}
+            >
+              🎡 Wheel
+            </button>
+            <button 
+              className={`tab-btn ${activeTab === 'beerpong' ? 'active' : ''}`}
+              onClick={() => setActiveTab('beerpong')}
+            >
+              🍺 Beerpong
+            </button>
+          </div>
+
+          {activeTab === 'wheel' ? (
+            currentWheel ? (
+              <>
+                <div className="wheel-header">
+                  <h2>{currentWheel.name}</h2>
+                  {editingWheel !== currentWheel.id && (
+                    <button className="edit-btn" onClick={() => setEditingWheel(currentWheel.id)}>
+                      Edit
+                    </button>
+                  )}
+                  <button className="delete-btn" onClick={() => handleDeleteWheel(currentWheel.id)}>
+                    Delete
                   </button>
-                )}
-                <button className="delete-btn" onClick={() => handleDeleteWheel(currentWheel.id)}>
-                  Delete
-                </button>
-              </div>
-
-              <div className="wheel-container">
-                <SpinWheel
-                  items={currentWheel.items}
-                  onSpinEnd={handleSpinResult}
-                  key={currentWheel.id}
-                />
-              </div>
-
-              {selectedResult && (
-                <div className="result-modal">
-                  <div className="result-content">
-                    <h3>Winner!</h3>
-                    <p>{selectedResult}</p>
-                    <button onClick={() => setSelectedResult(null)}>Close</button>
-                  </div>
                 </div>
-              )}
 
-              <ItemList
-                items={currentWheel.items}
-                onAdd={handleAddItem}
-                onRemove={handleRemoveItem}
-                onEdit={handleEditItem}
-                newItem={newItem}
-                setNewItem={setNewItem}
-              />
+                <div className="wheel-container">
+                  <SpinWheel
+                    items={currentWheel.items}
+                    onSpinEnd={handleSpinResult}
+                    key={currentWheel.id}
+                  />
+                </div>
 
-              <Scoreboard history={history} leaderboard={leaderboard} />
-            </>
+                {selectedResult && (
+                  <div className="result-modal">
+                    <div className="result-content">
+                      <h3>Winner!</h3>
+                      <p>{selectedResult}</p>
+                      <button onClick={() => setSelectedResult(null)}>Close</button>
+                    </div>
+                  </div>
+                )}
+
+                <ItemList
+                  items={currentWheel.items}
+                  onAdd={handleAddItem}
+                  onRemove={handleRemoveItem}
+                  onEdit={handleEditItem}
+                  newItem={newItem}
+                  setNewItem={setNewItem}
+                />
+
+                <Scoreboard history={history} leaderboard={leaderboard} />
+              </>
+            ) : (
+              <div className="no-wheel">
+                <p>Create or select a wheel to get started!</p>
+              </div>
+            )
           ) : (
-            <div className="no-wheel">
-              <p>Create or select a wheel to get started!</p>
-            </div>
+            <BeerpongScoreboard apiBaseUrl={API_BASE_URL} />
           )}
         </main>
       </div>
