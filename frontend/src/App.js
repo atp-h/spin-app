@@ -96,8 +96,9 @@ function App() {
   };
 
   const handleDeleteWheel = async (id) => {
+    if (!window.confirm('Weet je zeker dat je dit rad wilt verwijderen?')) return;
     try {
-      await axios.delete(`${API_BASE_URL}/api/wheels/${id}`);
+      await axios.post(`${API_BASE_URL}/api/wheels/${id}/delete`);
       const newWheels = wheels.filter(w => w.id !== id);
       setWheels(newWheels);
       if (currentWheel?.id === id) {
@@ -109,6 +110,7 @@ function App() {
       }
     } catch (error) {
       console.error('Error deleting wheel:', error);
+      alert('Fout bij verwijderen rad: ' + (error.response?.data?.error || error.message));
     }
   };
 

@@ -151,6 +151,19 @@ app.delete('/api/wheels/:id', (req, res) => {
   }
 });
 
+app.post('/api/wheels/:id/delete', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM wheels WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Wheel not found' });
+    }
+    res.json({ message: 'Wheel deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Spin API
 app.post('/api/spins', (req, res) => {
   try {
@@ -239,6 +252,17 @@ app.post('/api/players/:id/toggle-presence', (req, res) => {
 });
 
 app.delete('/api/players/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM players WHERE id = ?');
+    stmt.run(req.params.id);
+    res.json({ message: 'Player deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Post-based delete fallback
+app.post('/api/players/:id/delete', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM players WHERE id = ?');
     stmt.run(req.params.id);
@@ -349,7 +373,29 @@ app.delete('/api/teams/:id', (req, res) => {
   }
 });
 
+app.post('/api/teams/:id/delete', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM teams WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Team not found' });
+    res.json({ message: 'Team deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.delete('/api/matches/:id', (req, res) => {
+  try {
+    const stmt = db.prepare('DELETE FROM matches WHERE id = ?');
+    const result = stmt.run(req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Match not found' });
+    res.json({ message: 'Match deleted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/matches/:id/delete', (req, res) => {
   try {
     const stmt = db.prepare('DELETE FROM matches WHERE id = ?');
     const result = stmt.run(req.params.id);
