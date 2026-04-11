@@ -97,18 +97,21 @@ function BeerpongScoreboard({ apiBaseUrl }) {
     }
   };
 
-  const findOrCreateTeam = async (playerIds, currentTeams) => {
-    const sortedIds = [...playerIds].sort((a, b) => a - b);
-    const pNames = players.filter(p => sortedIds.includes(p.id)).map(p => p.name).sort();
+  const findOrCreateTeam = async (playerIds, currentTeams, currentPlayers) => {
+    const sortedIds = [...playerIds].map(id => parseInt(id)).sort((a, b) => a - b);
+    const pNames = currentPlayers
+      .filter(p => sortedIds.includes(parseInt(p.id)))
+      .map(p => p.name)
+      .sort();
     
     if (pNames.length !== playerIds.length) {
-      console.error('Spelers niet gevonden in state:', sortedIds, players);
+      console.error('Niet alle spelers gevonden in de lijst:', { sortedIds, currentPlayers });
       return null;
     }
 
     const teamName = pNames.join(' & ');
     
-    // Check in de meegegeven teams lijst (om race conditions te voorkomen)
+    // Check in de meegegeven teams lijst
     const existingTeam = currentTeams.find(t => t.name === teamName);
     if (existingTeam) return existingTeam.id;
 
@@ -117,21 +120,13 @@ function BeerpongScoreboard({ apiBaseUrl }) {
         name: teamName, 
         player_ids: sortedIds 
       });
-      // We halen teams niet direct hier op, maar we retourneren de ID
-      // De aanroeper kan de state updaten indien nodig
       return res.data.id;
     } catch (error) {
       console.error('Error creating team:', error);
-      const errorMsg = error.response?.data?.error || error.message;
-      if (errorMsg.includes('UNIQUE')) {
-        // Als het team al bestaat in de DB maar niet in onze state, haal dan de teams opnieuw op
-        const tRes = await axios.get(`${apiBaseUrl}/api/teams`);
-        const latestTeams = tRes.data;
-        setTeams(latestTeams);
-        const retryTeam = latestTeams.find(t => t.name === teamName);
-        return retryTeam ? retryTeam.id : null;
-      }
-      return null;
+      // Als het team al bestaat in de DB (race condition)
+      const tRes = await axios.get(`${apiBaseUrl}/api/teams`);
+      const retryTeam = tRes.data.find(t => t.name === teamName);
+      return retryTeam ? retryTeam.id : null;
     }
   };
 
@@ -177,24 +172,31 @@ function BeerpongScoreboard({ apiBaseUrl }) {
     try {
       setIsSubmitting(true);
       
-      // We halen de meest verse teams lijst op om zeker te zijn
-      const tRes = await axios.get(`${apiBaseUrl}/api/teams`);
+      // Haal de allernieuwste data op voor spelers en teams
+      const [pRes, tRes] = await Promise.all([
+        axios.get(`${apiBaseUrl}/api/players`),
+        axios.get(`${apiBaseUrl}/api/teams`)
+      ]);
+      
+      const currentPlayers = pRes.data;
       const currentTeams = tRes.data;
+      
+      setPlayers(currentPlayers);
       setTeams(currentTeams);
 
-      const teamAId = await findOrCreateTeam(pIdsA, currentTeams);
-      const teamBId = await findOrCreateTeam(pIdsB, currentTeams);
+      const teamAId = await findOrCreateTeam(pIdsA, currentTeams, currentPlayers);
+      const teamBId = await findOrCreateTeam(pIdsB, currentTeams, currentPlayers);
 
       if (teamAId && teamBId) {
-        // Haal teams opnieuw op zodat de nieuwe teams in de state staan voor de render
-        const freshTRes = await axios.get(`${apiBaseUrl}/api/teams`);
-        setTeams(freshTRes.data);
-        
+        // Update teams state nog een keer voor de zekerheid
+        const finalTRes = await axios.get(`${apiBaseUrl}/api/teams`);
+        setTeams(finalTRes.data);
         setMmResult({ teamAId, teamBId, scoreA: 0, scoreB: 0 });
       } else {
-        alert('Kon teams niet vinden of aanmaken. Controleer de console voor details.');
+        alert('Kon teams niet vinden of aanmaken. Controleer of de geselecteerde spelers nog bestaan.');
       }
     } catch (error) {
+      console.error('Matchmaker submit error:', error);
       alert('Er ging iets mis bij het starten van de match.');
     } finally {
       setIsSubmitting(false);

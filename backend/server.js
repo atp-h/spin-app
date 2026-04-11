@@ -293,10 +293,10 @@ app.post('/api/players/:id/delete', (req, res) => {
 app.get('/api/teams', (req, res) => {
   try {
     const teams = db.prepare(`
-      SELECT t.*, GROUP_CONCAT(p.name, ', ') as members 
+      SELECT t.*, GROUP_CONCAT(p.name, ' & ') as members 
       FROM teams t
-      JOIN team_players tp ON t.id = tp.team_id
-      JOIN players p ON tp.player_id = p.id
+      LEFT JOIN team_players tp ON t.id = tp.team_id
+      LEFT JOIN players p ON tp.player_id = p.id
       GROUP BY t.id
       ORDER BY t.wins DESC, t.name ASC
     `).all();
@@ -312,21 +312,35 @@ app.post('/api/teams', (req, res) => {
     return res.status(400).json({ error: 'Name and players are required' });
   }
   
-  const transaction = db.transaction(() => {
-    const stmt = db.prepare('INSERT INTO teams (name) VALUES (?)');
-    const result = stmt.run(name);
-    const teamId = result.lastInsertRowid;
-    
-    const playerStmt = db.prepare('INSERT INTO team_players (team_id, player_id) VALUES (?, ?)');
-    for (const playerId of player_ids) {
-      playerStmt.run(teamId, playerId);
-    }
-    return teamId;
-  });
-
   try {
+    const transaction = db.transaction(() => {
+      let teamId;
+      const existingTeam = db.prepare('SELECT id FROM teams WHERE name = ?').get(name);
+      
+      if (existingTeam) {
+        teamId = existingTeam.id;
+        // Zorg dat de spelers gelinkt zijn (indien ze her-aangemaakt zijn met andere IDs)
+        db.prepare('DELETE FROM team_players WHERE team_id = ?').run(teamId);
+        const playerStmt = db.prepare('INSERT INTO team_players (team_id, player_id) VALUES (?, ?)');
+        for (const playerId of player_ids) {
+          playerStmt.run(teamId, playerId);
+        }
+      } else {
+        const stmt = db.prepare('INSERT INTO teams (name) VALUES (?)');
+        const result = stmt.run(name);
+        teamId = result.lastInsertRowid;
+        
+        const playerStmt = db.prepare('INSERT INTO team_players (team_id, player_id) VALUES (?, ?)');
+        for (const playerId of player_ids) {
+          playerStmt.run(teamId, playerId);
+        }
+      }
+      return teamId;
+    });
+
     const teamId = transaction();
-    res.json({ id: teamId, name, wins: 0 });
+    const team = db.prepare('SELECT * FROM teams WHERE id = ?').get(teamId);
+    res.json(team);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
