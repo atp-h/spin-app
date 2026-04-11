@@ -65,7 +65,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
   };
 
   const handleDeletePlayer = async (id) => {
-    if (!confirm('Weet je zeker dat je deze speler wilt verwijderen?')) return;
+    if (!window.confirm('Weet je zeker dat je deze speler wilt verwijderen?')) return;
     try {
       await axios.delete(`${apiBaseUrl}/api/players/${id}`);
       fetchData();
@@ -76,7 +76,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
   };
 
   const handleDeleteTeam = async (id) => {
-    if (!confirm('Weet je zeker dat je dit team wilt verwijderen?')) return;
+    if (!window.confirm('Weet je zeker dat je dit team wilt verwijderen?')) return;
     try {
       await axios.delete(`${apiBaseUrl}/api/teams/${id}`);
       fetchData();
@@ -87,7 +87,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
   };
 
   const handleDeleteMatch = async (id) => {
-    if (!confirm('Weet je zeker dat je deze wedstrijd wilt verwijderen?')) return;
+    if (!window.confirm('Weet je zeker dat je deze wedstrijd wilt verwijderen?')) return;
     try {
       await axios.delete(`${apiBaseUrl}/api/matches/${id}`);
       fetchData();
