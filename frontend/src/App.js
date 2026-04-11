@@ -4,6 +4,7 @@ import SpinWheel from './components/SpinWheel';
 import ItemList from './components/ItemList';
 import Scoreboard from './components/Scoreboard';
 import BeerpongScoreboard from './components/BeerpongScoreboard';
+import Manual from './components/Manual';
 
 let API_BASE_URL = process.env.REACT_APP_API_URL || '';
 if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
@@ -200,6 +201,12 @@ function App() {
             >
               🍺 Beerpong
             </button>
+            <button 
+              className={`tab-btn ${activeTab === 'manual' ? 'active' : ''}`}
+              onClick={() => setActiveTab('manual')}
+            >
+              📖 Handleiding
+            </button>
           </div>
 
           {activeTab === 'wheel' ? (
@@ -251,8 +258,10 @@ function App() {
                 <p>Create or select a wheel to get started!</p>
               </div>
             )
-          ) : (
+          ) : activeTab === 'beerpong' ? (
             <BeerpongScoreboard apiBaseUrl={API_BASE_URL} />
+          ) : (
+            <Manual />
           )}
         </main>
       </div>
