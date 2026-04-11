@@ -58,6 +58,8 @@ function App() {
         const firstWheel = res.data[0];
         setCurrentWheel(firstWheel);
         setWheelName(firstWheel.name);
+        // Direct fetch history for the first wheel
+        fetchScoreboard(firstWheel.id);
       }
     } catch (error) {
       console.error('Error fetching wheels:', error);

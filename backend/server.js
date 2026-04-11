@@ -295,13 +295,16 @@ app.post('/api/teams', (req, res) => {
 app.get('/api/matches', (req, res) => {
   try {
     const matches = db.prepare(`
-      SELECT m.*, ta.name as team_a_name, tb.name as team_b_name, w.name as winner_name
+      SELECT m.*, 
+             COALESCE(ta.name, 'Verwijderd Team') as team_a_name, 
+             COALESCE(tb.name, 'Verwijderd Team') as team_b_name, 
+             COALESCE(w.name, 'Onbekend') as winner_name
       FROM matches m
-      JOIN teams ta ON m.team_a_id = ta.id
-      JOIN teams tb ON m.team_b_id = tb.id
-      JOIN teams w ON m.winner_id = w.id
+      LEFT JOIN teams ta ON m.team_a_id = ta.id
+      LEFT JOIN teams tb ON m.team_b_id = tb.id
+      LEFT JOIN teams w ON m.winner_id = w.id
       ORDER BY m.created_at DESC
-      LIMIT 50
+      LIMIT 100
     `).all();
     res.json(matches);
   } catch (error) {
