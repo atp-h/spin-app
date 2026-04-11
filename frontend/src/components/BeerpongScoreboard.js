@@ -189,6 +189,10 @@ function BeerpongScoreboard({ apiBaseUrl }) {
       const teamBId = await findOrCreateTeam(pIdsB, currentTeams);
 
       if (teamAId && teamBId) {
+        // Haal teams opnieuw op zodat de nieuwe teams in de state staan voor de render
+        const freshTRes = await axios.get(`${apiBaseUrl}/api/teams`);
+        setTeams(freshTRes.data);
+        
         setMmResult({ teamAId, teamBId, scoreA: 0, scoreB: 0 });
       } else {
         alert('Kon teams niet vinden of aanmaken. Controleer de console voor details.');
