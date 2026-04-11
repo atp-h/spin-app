@@ -65,37 +65,34 @@ function BeerpongScoreboard({ apiBaseUrl }) {
   };
 
   const handleDeletePlayer = async (id) => {
-    if (!window.confirm('Weet je zeker dat je deze speler wilt verwijderen?')) return;
+    if (!confirm('Weet je zeker dat je deze speler wilt verwijderen?')) return;
     try {
-      setPlayers(players.filter(p => p.id !== id));
       await axios.delete(`${apiBaseUrl}/api/players/${id}`);
       fetchData();
     } catch (error) {
-      alert('Fout: ' + error.message);
+      alert('Fout bij verwijderen speler: ' + error.message);
       fetchData();
     }
   };
 
   const handleDeleteTeam = async (id) => {
-    if (!window.confirm('Weet je zeker dat je dit team wilt verwijderen?')) return;
+    if (!confirm('Weet je zeker dat je dit team wilt verwijderen?')) return;
     try {
-      setTeams(teams.filter(t => t.id !== id));
       await axios.delete(`${apiBaseUrl}/api/teams/${id}`);
       fetchData();
     } catch (error) {
-      alert('Fout: ' + error.message);
+      alert('Fout bij verwijderen team: ' + error.message);
       fetchData();
     }
   };
 
   const handleDeleteMatch = async (id) => {
-    if (!window.confirm('Weet je zeker dat je deze wedstrijd wilt verwijderen?')) return;
+    if (!confirm('Weet je zeker dat je deze wedstrijd wilt verwijderen?')) return;
     try {
-      setMatches(matches.filter(m => m.id !== id));
       await axios.delete(`${apiBaseUrl}/api/matches/${id}`);
       fetchData();
     } catch (error) {
-      alert('Fout: ' + error.message);
+      alert('Fout bij verwijderen wedstrijd: ' + error.message);
       fetchData();
     }
   };
@@ -264,7 +261,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
                   </td>
                   <td>{p.name} {!p.is_present && '(Afwezig)'}</td>
                   <td>{p.wins}</td>
-                  <td><button type="button" className="del-btn-small" onClick={(e) => { e.preventDefault(); handleDeletePlayer(p.id); }}>×</button></td>
+                  <td><button type="button" className="del-btn-small" onClick={() => handleDeletePlayer(p.id)}>×</button></td>
                 </tr>
               ))}
             </tbody>
@@ -286,7 +283,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
                   <td>{t.name}</td>
                   <td>{t.members}</td>
                   <td>{t.wins}</td>
-                  <td><button type="button" className="del-btn-small" onClick={(e) => { e.preventDefault(); handleDeleteTeam(t.id); }}>×</button></td>
+                  <td><button type="button" className="del-btn-small" onClick={() => handleDeleteTeam(t.id)}>×</button></td>
                 </tr>
               ))}
             </tbody>
@@ -321,7 +318,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
               <div key={m.id} className="match-card">
                 <div className="match-header-row">
                   <div className="match-date">{new Date(m.created_at).toLocaleDateString()}</div>
-                  <button type="button" className="del-btn-small" onClick={(e) => { e.preventDefault(); handleDeleteMatch(m.id); }}>×</button>
+                  <button type="button" className="del-btn-small" onClick={() => handleDeleteMatch(m.id)}>×</button>
                 </div>
                 <div className="match-main">
                   <span className={m.winner_id === m.team_a_id ? 'winner' : ''}>{m.team_a_name}</span>
