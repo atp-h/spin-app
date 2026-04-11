@@ -883,6 +883,12 @@ body {
   font-size: 0.9rem;
 }
 
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+}
+
 .del-btn-small {
   background: rgba(239, 68, 68, 0.2);
   border: 1px solid rgba(239, 68, 68, 0.5);

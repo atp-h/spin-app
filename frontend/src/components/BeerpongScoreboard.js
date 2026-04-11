@@ -9,8 +9,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
 
   // Form states
   const [newPlayerName, setNewPlayerName] = useState('');
-  const [newTeamName, setNewTeamName] = useState('');
-  const [selectedPlayerIds, setSelectedPlayerIds] = useState([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [matchData, setMatchData] = useState({
     team_a_id: '',
@@ -66,7 +65,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
   };
 
   const handleDeletePlayer = async (id) => {
-    alert('Verwijderen speler ID: ' + id); // TEST MELDING
+    if (!window.confirm('Weet je zeker dat je deze speler wilt verwijderen?')) return;
     try {
       setPlayers(players.filter(p => p.id !== id));
       await axios.delete(`${apiBaseUrl}/api/players/${id}`);
@@ -78,7 +77,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
   };
 
   const handleDeleteTeam = async (id) => {
-    alert('Verwijderen team ID: ' + id); // TEST MELDING
+    if (!window.confirm('Weet je zeker dat je dit team wilt verwijderen?')) return;
     try {
       setTeams(teams.filter(t => t.id !== id));
       await axios.delete(`${apiBaseUrl}/api/teams/${id}`);
@@ -90,7 +89,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
   };
 
   const handleDeleteMatch = async (id) => {
-    alert('Verwijderen wedstrijd ID: ' + id); // TEST MELDING
+    if (!window.confirm('Weet je zeker dat je deze wedstrijd wilt verwijderen?')) return;
     try {
       setMatches(matches.filter(m => m.id !== id));
       await axios.delete(`${apiBaseUrl}/api/matches/${id}`);
@@ -101,12 +100,19 @@ function BeerpongScoreboard({ apiBaseUrl }) {
     }
   };
 
-  const findOrCreateTeam = async (playerIds) => {
+  const findOrCreateTeam = async (playerIds, currentTeams) => {
     const sortedIds = [...playerIds].sort((a, b) => a - b);
     const pNames = players.filter(p => sortedIds.includes(p.id)).map(p => p.name).sort();
+    
+    if (pNames.length !== playerIds.length) {
+      console.error('Spelers niet gevonden in state:', sortedIds, players);
+      return null;
+    }
+
     const teamName = pNames.join(' & ');
     
-    const existingTeam = teams.find(t => t.name === teamName);
+    // Check in de meegegeven teams lijst (om race conditions te voorkomen)
+    const existingTeam = currentTeams.find(t => t.name === teamName);
     if (existingTeam) return existingTeam.id;
 
     try {
@@ -114,11 +120,20 @@ function BeerpongScoreboard({ apiBaseUrl }) {
         name: teamName, 
         player_ids: sortedIds 
       });
-      const tRes = await axios.get(`${apiBaseUrl}/api/teams`);
-      setTeams(tRes.data);
+      // We halen teams niet direct hier op, maar we retourneren de ID
+      // De aanroeper kan de state updaten indien nodig
       return res.data.id;
     } catch (error) {
       console.error('Error creating team:', error);
+      const errorMsg = error.response?.data?.error || error.message;
+      if (errorMsg.includes('UNIQUE')) {
+        // Als het team al bestaat in de DB maar niet in onze state, haal dan de teams opnieuw op
+        const tRes = await axios.get(`${apiBaseUrl}/api/teams`);
+        const latestTeams = tRes.data;
+        setTeams(latestTeams);
+        const retryTeam = latestTeams.find(t => t.name === teamName);
+        return retryTeam ? retryTeam.id : null;
+      }
       return null;
     }
   };
@@ -134,13 +149,16 @@ function BeerpongScoreboard({ apiBaseUrl }) {
 
     const winner_id = score_a > score_b ? team_a_id : team_b_id;
     try {
+      setIsSubmitting(true);
       await axios.post(`${apiBaseUrl}/api/matches`, { ...data, winner_id });
       setMatchData({ team_a_id: '', team_b_id: '', score_a: 0, score_b: 0 });
       setMmResult(null);
-      fetchData();
+      await fetchData();
       setSubTab('matches');
     } catch (error) {
-      alert('Fout bij opslaan match');
+      alert('Fout bij opslaan match: ' + (error.response?.data?.error || error.message));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -159,11 +177,26 @@ function BeerpongScoreboard({ apiBaseUrl }) {
       return;
     }
 
-    const teamAId = await findOrCreateTeam(pIdsA);
-    const teamBId = await findOrCreateTeam(pIdsB);
+    try {
+      setIsSubmitting(true);
+      
+      // We halen de meest verse teams lijst op om zeker te zijn
+      const tRes = await axios.get(`${apiBaseUrl}/api/teams`);
+      const currentTeams = tRes.data;
+      setTeams(currentTeams);
 
-    if (teamAId && teamBId) {
-      setMmResult({ teamAId, teamBId, scoreA: 0, scoreB: 0 });
+      const teamAId = await findOrCreateTeam(pIdsA, currentTeams);
+      const teamBId = await findOrCreateTeam(pIdsB, currentTeams);
+
+      if (teamAId && teamBId) {
+        setMmResult({ teamAId, teamBId, scoreA: 0, scoreB: 0 });
+      } else {
+        alert('Kon teams niet vinden of aanmaken. Controleer de console voor details.');
+      }
+    } catch (error) {
+      alert('Er ging iets mis bij het starten van de match.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -207,6 +240,7 @@ function BeerpongScoreboard({ apiBaseUrl }) {
               placeholder="Player name..." 
               value={newPlayerName}
               onChange={(e) => setNewPlayerName(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleAddPlayer()}
             />
             <button onClick={handleAddPlayer}>Add</button>
           </div>
@@ -273,7 +307,9 @@ function BeerpongScoreboard({ apiBaseUrl }) {
                 {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
-            <button className="full-width-btn" onClick={() => handleRecordMatch()}>Record Match</button>
+            <button className="full-width-btn" onClick={() => handleRecordMatch()} disabled={isSubmitting}>
+              {isSubmitting ? 'Bezig...' : 'Record Match'}
+            </button>
           </div>
 
           <div className="match-history-list">
@@ -325,8 +361,10 @@ function BeerpongScoreboard({ apiBaseUrl }) {
                 </div>
               </div>
               <div className="mm-actions">
-                <button className="full-width-btn" onClick={handleMatchmakerSubmit}>Start Match</button>
-                <button className="outline-btn" onClick={shuffleSelected} style={{marginTop: '10px'}}>🎲 Random Shuffle 4 present players</button>
+                <button className="full-width-btn" onClick={handleMatchmakerSubmit} disabled={isSubmitting}>
+                  {isSubmitting ? 'Bezig...' : 'Start Match'}
+                </button>
+                <button className="outline-btn" onClick={shuffleSelected} style={{marginTop: '10px'}} disabled={isSubmitting}>🎲 Random Shuffle 4 present players</button>
               </div>
             </div>
           ) : (
@@ -347,8 +385,10 @@ function BeerpongScoreboard({ apiBaseUrl }) {
                     <span>-</span>
                     <input type="number" value={mmResult.scoreB} onChange={(e) => setMmResult({...mmResult, scoreB: parseInt(e.target.value)})}/>
                   </div>
-                  <button className="full-width-btn" onClick={handleMmSave}>Save & Finish</button>
-                  <button className="outline-btn" style={{marginTop: '10px'}} onClick={() => setMmResult(null)}>Cancel</button>
+                  <button className="full-width-btn" onClick={handleMmSave} disabled={isSubmitting}>
+                    {isSubmitting ? 'Opslaan...' : 'Save & Finish'}
+                  </button>
+                  <button className="outline-btn" style={{marginTop: '10px'}} onClick={() => setMmResult(null)} disabled={isSubmitting}>Cancel</button>
                 </div>
             </div>
           )}
