@@ -1,182 +1,94 @@
-# Spin The Wheel
+# Spin The Wheel & Beerpong Hub
 
-Interactive spin-the-wheel web application with React frontend and Node.js backend.
+Interactive spin-the-wheel web application and Beerpong competition manager with React frontend and Node.js backend.
 
-## Features
+## 🌟 Features
 
-- Create and manage multiple wheels
-- Add, edit, and remove items from wheels
-- Smooth spin animation with easing
-- Fair random selection
-- Persistent storage with SQLite
-- Responsive design (mobile + desktop)
+### 🎡 Spin The Wheel
+- **Wheel Management**: Create, edit, and delete multiple custom wheels.
+- **Visual Animation**: Smooth Canvas-based spin animation with easing.
+- **Spin History**: Automatic recording of every spin result.
+- **Leaderboards**: Track which items win most frequently per wheel.
 
-## Project Structure
+### 🍺 Beerpong Competition
+- **Player Management**: Track individual player wins across all games.
+- **Attendance System**: Toggle who is present for the night. Afraid of ghost players? Only "present" players appear in the Matchmaker.
+- **Team Management**: Form Duo teams (2 players). The app intelligently tracks stats for unique combinations.
+- **Match History**: Record full game results (e.g., 10 - 8).
+- **🎲 Duo Matchmaker**: 
+  - Manually pick 4 present players for a match.
+  - **Random Shuffle**: Let the app randomly split 4 present players into two fair duos.
+  - Quick result entry immediately after drawing.
+
+## 🛠 Tech Stack
+- **Frontend**: React.js, Vanilla CSS.
+- **Backend**: Node.js, Express.
+- **Database**: SQLite (`better-sqlite3`) with performance indexing.
+- **Containerization**: Docker & Docker Compose.
+
+## 📁 Project Structure
 
 ```
 spin-app/
 ├── frontend/           # React application
-│   ├── public/
-│   │   └── index.html
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── SpinWheel.js
-│   │   │   └── ItemList.js
-│   │   ├── App.js
-│   │   ├── App.css
-│   │   └── index.js
-│   └── package.json
+│   │   │   ├── SpinWheel.js          # Canvas wheel logic
+│   │   │   ├── BeerpongScoreboard.js # Competition manager
+│   │   │   ├── ItemList.js           # Wheel items editor
+│   │   │   └── Scoreboard.js         # Spin results
+│   │   ├── App.js                    # Main layout & Routing
+│   │   └── App.css                   # Global styling
 ├── backend/            # Express API server
-│   ├── server.js
-│   └── package.json
+│   ├── server.js       # API endpoints & DB schema
+│   └── wheels.db       # SQLite Database
 ├── Dockerfile.frontend
 ├── Dockerfile.backend
 ├── docker-compose.yml
 └── README.md
 ```
 
-## Local Development
+## 🚀 Getting Started
 
-### Prerequisites
+### Using Docker (Recommended)
 
-- Node.js 18+
-- npm
+1. Clone the repository.
+2. Build and start the containers:
+   ```bash
+   docker-compose up --build -d
+   ```
+3. Open http://localhost in your browser.
 
-### Setup
+### Local Development (without Docker)
 
-```bash
-cd spin-app
+1. **Backend**:
+   ```bash
+   cd backend
+   npm install
+   npm start
+   ```
+2. **Frontend**:
+   ```bash
+   cd frontend
+   npm install
+   npm start
+   ```
 
-# Install all dependencies
-npm run install:all
+## 🔌 API Endpoints
 
-# Run both frontend and backend
-npm run dev
-```
+### Wheels & Spins
+- `GET /api/wheels`: List all wheels.
+- `POST /api/wheels`: Create a new wheel.
+- `GET /api/wheels/:id/history`: Get spin history for a wheel.
+- `GET /api/wheels/:id/leaderboard`: Get win counts per item.
 
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
+### Beerpong Competition
+- `GET /api/players`: List all players.
+- `POST /api/players`: Add a new player.
+- `POST /api/players/:id/toggle-presence`: Toggle if a player is attending.
+- `GET /api/teams`: List all teams and their members.
+- `POST /api/matches`: Record a game result (updates team and player wins).
+- `DELETE /api/matches/:id`: Remove a match from history.
 
-### Running Frontend Only (without backend)
-
-```bash
-cd frontend
-npm install
-npm start
-```
-
-### Running Backend Only
-
-```bash
-cd backend
-npm install
-npm start
-```
-
-## Docker Deployment
-
-### Build and Run
-
-```bash
-cd spin-app
-docker-compose up -d
-```
-
-- Frontend: http://localhost:3000
-- Backend API: http://localhost:5000
-
-### Stop
-
-```bash
-docker-compose down
-```
-
-### Rebuild
-
-```bash
-docker-compose up -d --build
-```
-
-## Server Deployment (Linux)
-
-### Option 1: Docker (Recommended)
-
-```bash
-# Install Docker
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-
-# Clone/build your project
-cd spin-app
-docker-compose up -d --build
-```
-
-### Option 2: Direct Installation
-
-```bash
-# Install Node.js 18
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-sudo apt-get install -y nodejs
-
-# Setup backend
-cd spin-app/backend
-npm install
-npm start &
-
-# Build and serve frontend
-cd spin-app/frontend
-npm install
-npm run build
-npx serve -s build -l 3000 &
-```
-
-## HAProxy Configuration
-
-Example HAProxy config for reverse proxy:
-
-```haproxy
-frontend http_front
-    bind *:80
-    bind *:443 ssl crt /path/to/certs.pem
-    default_backend spin_app
-
-backend spin_app
-    option httpchk GET /api/wheels
-    http-check expect status 200
-    server frontend localhost:3000 check
-    server backend localhost:5000 check
-```
-
-Or with path-based routing:
-
-```haproxy
-frontend http_front
-    bind *:80
-    default_backend spin_app
-
-backend spin_app
-    http-request set-path %[path,regsub(/api,/api)]
-    acl is_api path_beg /api
-    use_backend api_backend if is_api
-    use_backend frontend_backend if !is_api
-
-backend frontend_backend
-    server frontend localhost:3000
-
-backend api_backend
-    server backend localhost:5000
-```
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | /api/wheels | List all wheels |
-| GET | /api/wheels/:id | Get wheel by ID |
-| POST | /api/wheels | Create new wheel |
-| PUT | /api/wheels/:id | Update wheel |
-| DELETE | /api/wheels/:id | Delete wheel |
-
-## License
-
+## 🛡 License
 MIT
