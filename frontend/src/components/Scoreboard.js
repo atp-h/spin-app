@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseDbDate } from '../utils';
 
 function Scoreboard({ history, leaderboard }) {
   return (
@@ -14,8 +15,8 @@ function Scoreboard({ history, leaderboard }) {
               </tr>
             </thead>
             <tbody>
-              {leaderboard.map((entry, index) => (
-                <tr key={index}>
+              {leaderboard.map((entry) => (
+                <tr key={entry.item}>
                   <td>{entry.item}</td>
                   <td>{entry.wins}</td>
                 </tr>
@@ -35,7 +36,7 @@ function Scoreboard({ history, leaderboard }) {
               <li key={spin.id}>
                 <span className="history-item">{spin.item}</span>
                 <span className="history-time">
-                  {new Date(spin.created_at).toLocaleString()}
+                  {parseDbDate(spin.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
                 </span>
               </li>
             ))}

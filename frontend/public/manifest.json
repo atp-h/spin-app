@@ -1,0 +1,17 @@
+{
+  "short_name": "Spin & Pong",
+  "name": "Spin The Wheel & Beerpong Hub",
+  "description": "Rad van fortuin en beerpong-competitie voor je vriendengroep",
+  "icons": [
+    { "src": "favicon.png", "sizes": "64x64", "type": "image/png" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#0b0820",
+  "background_color": "#0b0820"
+}

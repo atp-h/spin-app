@@ -2,44 +2,44 @@ import React from 'react';
 
 function Manual() {
   return (
-    <div className="manual-container">
-      <h2>📖 Handleiding & Uitleg</h2>
-      
+    <div className="manual">
       <section className="manual-section">
-        <h3>🎡 Het Rad (Spin The Wheel)</h3>
+        <h3>🎡 Het Rad</h3>
         <ul>
-          <li><strong>Wielen aanmaken:</strong> Gebruik de sidebar (links op PC, bovenin op mobiel) om nieuwe raderen aan te maken voor verschillende thema's.</li>
-          <li><strong>Items toevoegen:</strong> Voeg namen of keuzes toe in de lijst onder het rad. Je kunt items ook bewerken of verwijderen.</li>
-          <li><strong>Spinnen:</strong> Klik of tik op het rad om het te laten draaien. De winnaar wordt automatisch opgeslagen in de historie onderaan de pagina.</li>
+          <li><strong>Raderen:</strong> kies een rad bovenaan of maak er een met <strong>＋ Nieuw rad</strong>. Met ✏️ hernoem je, met ⧉ maak je een kopie en met 🗑 verwijder je (je hebt dan nog even tijd voor <em>Ongedaan maken</em>).</li>
+          <li><strong>Items:</strong> klap <em>Items</em> open om toe te voegen, te bewerken (tik op de naam) of te verwijderen. Met <strong>📋 Lijst plakken</strong> voeg je er in één keer veel toe (één per regel), met <strong>🍺 Aanwezige spelers</strong> vul je het rad met wie er vanavond is.</li>
+          <li><strong>Kans:</strong> tik op <strong>×1</strong> naast een item om het meer kans te geven (tot ×5). Het vak op het rad wordt dan ook groter.</li>
+          <li><strong>Spinnen:</strong> tik op het rad of op SPIN. Een draai duurt 4 tot 9 seconden en de uitslag wordt automatisch bewaard.</li>
+          <li><strong>Afvalrace:</strong> zet de schakelaar aan en de winnaar gaat na elke draai van het rad af — handig voor "wie is de volgende?". Met ↺ reset zet je iedereen terug.</li>
+          <li><strong>📺 Party mode:</strong> groot rad op het hele scherm, ideaal voor een tv of tablet.</li>
         </ul>
       </section>
 
       <section className="manual-section">
-        <h3>🍺 Beerpong Competitie</h3>
-        <p>In de Beerpong tab kun je jullie volledige competitie beheren:</p>
+        <h3>🍺 Beerpong</h3>
         <ul>
-          <li><strong>Players:</strong> Voeg hier alle namen van jullie vriendengroep toe. Vink aan wie er die avond <strong>aanwezig</strong> zijn. Alleen aanwezige spelers doen mee in de Matchmaker.</li>
-          <li><strong>Teams:</strong> Hier zie je alle duo-combinaties en hun winst-statistieken. De app maakt deze teams vaak automatisch aan bij het opslaan van een match.</li>
-          <li><strong>History:</strong> Hier voer je handmatig de scores in van een gespeelde pot (bijv. 10 - 8). De winnaar krijgt automatisch +1 winst op zowel team- als speler-niveau.</li>
+          <li><strong>👥 Spelers:</strong> voeg spelers toe en zet de schakelaar aan voor wie er is. Tik op een avatar om een emoji te kiezen. Start elke speelavond met <strong>🌙 Nieuwe avond</strong>: iedereen staat dan op afwezig en de stand van "vanavond" begint opnieuw.</li>
+          <li><strong>🏆 Stand:</strong> ranglijst van spelers of duo's, voor vanavond of altijd. De <em>rating</em> is een Elo-score: winnen van sterke tegenstanders levert meer op. Tik op een speler om de beste partner en aartsvijand te zien.</li>
+          <li><strong>📜 Historie:</strong> alle potjes per avond. Hier kun je ook een uitslag handmatig invoeren.</li>
         </ul>
       </section>
 
       <section className="manual-section highlight">
-        <h3>🎲 De Matchmaker</h3>
-        <p>Geen gedoe meer met wie tegen wie moet:</p>
+        <h3>🎲 Spelen</h3>
         <ol>
-          <li>Ga naar de <strong>Matchmaker</strong> sub-tab binnen Beerpong.</li>
-          <li>Kies handmatig 4 spelers óf klik op <strong>"🎲 Random Shuffle"</strong> om de app 4 aanwezige spelers te laten verdelen in twee duo's.</li>
-          <li>Klik op <strong>"Start Match"</strong> om het potje te beginnen.</li>
-          <li>Na het spelen vul je direct de score in en klik je op <strong>"Save & Finish"</strong> om de stand bij te werken.</li>
+          <li><strong>⚡ Snelle pot:</strong> kies 4 spelers, of laat het rad ze trekken met <strong>🎡 Spin de teams</strong>. De eerste twee vormen Side A, de laatste twee Side B. Na het spelen vul je de score in.</li>
+          <li><strong>👑 Winnaar blijft:</strong> zet duo's in de wachtrij (zelf kiezen of loten). De bovenste twee staan aan tafel; de winnaar blijft staan, de verliezer sluit achteraan aan.</li>
+          <li><strong>🏆 Toernooi:</strong> maakt willekeurige duo's van alle aanwezigen en zet ze in een knock-out schema. Vul per wedstrijd de uitslag in tot er een kampioen is.</li>
         </ol>
+        <p>Gelijkspel bestaat niet: de winnaar wordt bepaald door de score.</p>
       </section>
 
       <section className="manual-section">
         <h3>💡 Tips</h3>
         <ul>
-          <li><strong>Wissen:</strong> Gebruik het rode kruisje (×) om foutieve spelers, teams of matches te verwijderen.</li>
-          <li><strong>Snelheid:</strong> De app is geoptimaliseerd met database-indexen. Als hij toch traag wordt, ververs dan de pagina met <strong>Ctrl + F5</strong>.</li>
+          <li><strong>Samen spelen:</strong> iedereen kan de app op de eigen telefoon openen. Wijzigingen verschijnen binnen een paar seconden bij de anderen.</li>
+          <li><strong>PIN:</strong> als er een PIN is ingesteld, vraagt de app daarom bij verwijderen en bij een nieuwe avond.</li>
+          <li><strong>Op je beginscherm:</strong> kies in je browser "Zet op beginscherm" om de app als een echte app te openen.</li>
         </ul>
       </section>
     </div>

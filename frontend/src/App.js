@@ -1,275 +1,157 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-import SpinWheel from './components/SpinWheel';
-import ItemList from './components/ItemList';
-import Scoreboard from './components/Scoreboard';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import WheelPage from './components/WheelPage';
 import BeerpongScoreboard from './components/BeerpongScoreboard';
 import Manual from './components/Manual';
+import Modal from './components/Modal';
+import PinPrompt from './components/PinPrompt';
+import Toasts from './components/Toasts';
+import { api, getStoredPin, setStoredPin, isPinError } from './api';
+import { AppContext, useLiveVersion } from './hooks';
 
-let API_BASE_URL = process.env.REACT_APP_API_URL || '';
-
-// Forceer relatieve paden op publieke URL's om 'localhost' hardcoding uit de build te negeren
-if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
-  API_BASE_URL = ''; 
-} else if (!API_BASE_URL) {
-  API_BASE_URL = 'http://localhost:5000';
-}
+const readSoundSetting = () => {
+  try {
+    return localStorage.getItem('spin-sound') !== 'off';
+  } catch {
+    return true;
+  }
+};
 
 function App() {
-  const [wheels, setWheels] = useState([]);
-  const [currentWheel, setCurrentWheel] = useState(null);
-  const [selectedResult, setSelectedResult] = useState(null);
-  const [wheelName, setWheelName] = useState('');
-  const [newItem, setNewItem] = useState('');
-  const [editingWheel, setEditingWheel] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [leaderboard, setLeaderboard] = useState([]);
   const [activeTab, setActiveTab] = useState('wheel'); // 'wheel' or 'beerpong'
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [toasts, setToasts] = useState([]);
+  const [soundOn, setSoundOn] = useState(readSoundSetting);
+  const [pinRequired, setPinRequired] = useState(false);
+  const [pinPrompt, setPinPrompt] = useState(null); // resolver of the open PIN prompt
+  const toastId = useRef(0);
+  const version = useLiveVersion();
 
   useEffect(() => {
-    fetchWheels();
+    api.get('/api/auth')
+      .then(res => setPinRequired(!!res.data.pin_required))
+      .catch(() => {});
   }, []);
 
-  const fetchScoreboard = useCallback(async (wheelId) => {
-    if (!wheelId) return;
+  const dismissToast = useCallback((id) => setToasts(current => current.filter(t => t.id !== id)), []);
+
+  // notify(message, type = 'error' | 'success' | 'info', { duration, action: { label, onClick } })
+  const notify = useCallback((message, type = 'error', options = {}) => {
+    const id = ++toastId.current;
+    setToasts(current => [...current, { id, message, type, action: options.action }]);
+    setTimeout(() => dismissToast(id), options.duration || 4000);
+  }, [dismissToast]);
+
+  const askPin = useCallback(() => new Promise(resolve => setPinPrompt(() => resolve)), []);
+
+  // Resolves true when the action may go ahead (no PIN configured, PIN known, or just entered)
+  const ensurePin = useCallback(async (force = false) => {
+    if (!force && (!pinRequired || getStoredPin())) return true;
+    return askPin();
+  }, [pinRequired, askPin]);
+
+  // Runs a protected request; on a PIN rejection asks once and retries.
+  // Resolves undefined when the user cancels the PIN prompt.
+  const withPin = useCallback(async (action) => {
+    if (!(await ensurePin())) return undefined;
     try {
-      const [historyRes, leaderboardRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/wheels/${wheelId}/history`),
-        axios.get(`${API_BASE_URL}/api/wheels/${wheelId}/leaderboard`)
-      ]);
-      setHistory(historyRes.data);
-      setLeaderboard(leaderboardRes.data);
+      return await action();
     } catch (error) {
-      console.error('Error fetching scoreboard:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (currentWheel) {
-      fetchScoreboard(currentWheel.id);
-    }
-  }, [currentWheel, fetchScoreboard]);
-
-  const fetchWheels = async () => {
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/wheels`);
-      setWheels(res.data);
-      if (res.data.length > 0 && !currentWheel) {
-        const firstWheel = res.data[0];
-        setCurrentWheel(firstWheel);
-        setWheelName(firstWheel.name);
-        // Direct fetch history for the first wheel
-        fetchScoreboard(firstWheel.id);
+      if (isPinError(error) && error.response.status === 401) {
+        setStoredPin('');
+        setPinRequired(true);
+        if (await ensurePin(true)) return action();
+        return undefined;
       }
-    } catch (error) {
-      console.error('Error fetching wheels:', error);
+      throw error;
     }
-  };
+  }, [ensurePin]);
 
-  const handleCreateWheel = async () => {
-    if (!wheelName.trim()) return;
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/wheels`, {
-        name: wheelName,
-        items: []
-      });
-      setWheels([res.data, ...wheels]);
-      setCurrentWheel(res.data);
-      setEditingWheel(res.data.id);
-      setHistory([]);
-      setLeaderboard([]);
-    } catch (error) {
-      console.error('Error creating wheel:', error);
-    }
-  };
-
-  const handleUpdateWheel = async (id, name, items) => {
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/wheels/${id}/update`, { name, items });
-      setWheels(wheels.map(w => w.id === id ? res.data : w));
-      if (currentWheel?.id === id) {
-        setCurrentWheel(res.data);
-      }
-    } catch (error) {
-      console.error('Error updating wheel:', error);
-    }
-  };
-
-  const handleDeleteWheel = async (id) => {
-    if (!window.confirm('Weet je zeker dat je dit rad wilt verwijderen?')) return;
-    try {
-      await axios.post(`${API_BASE_URL}/api/wheels/${id}/delete`);
-      const newWheels = wheels.filter(w => w.id !== id);
-      setWheels(newWheels);
-      if (currentWheel?.id === id) {
-        const nextWheel = newWheels[0] || null;
-        setCurrentWheel(nextWheel);
-        setWheelName(nextWheel?.name || '');
-        setHistory([]);
-        setLeaderboard([]);
-      }
-    } catch (error) {
-      console.error('Error deleting wheel:', error);
-      alert('Fout bij verwijderen rad: ' + (error.response?.data?.error || error.message));
-    }
-  };
-
-  const handleAddItem = (item) => {
-    if (!currentWheel || !item.trim()) return;
-    const updatedItems = [...currentWheel.items, item];
-    handleUpdateWheel(currentWheel.id, currentWheel.name, updatedItems);
-    setNewItem('');
-  };
-
-  const handleRemoveItem = (index) => {
-    if (!currentWheel) return;
-    const updatedItems = currentWheel.items.filter((_, i) => i !== index);
-    handleUpdateWheel(currentWheel.id, currentWheel.name, updatedItems);
-  };
-
-  const handleEditItem = (index, newValue) => {
-    if (!currentWheel) return;
-    const updatedItems = [...currentWheel.items];
-    updatedItems[index] = newValue;
-    handleUpdateWheel(currentWheel.id, currentWheel.name, updatedItems);
-  };
-
-  const handleSpinResult = async (result) => {
-    setSelectedResult(result);
-    if (currentWheel) {
+  const toggleSound = () => {
+    setSoundOn(on => {
       try {
-        await axios.post(`${API_BASE_URL}/api/spins`, {
-          wheel_id: currentWheel.id,
-          item: result
-        });
-        fetchScoreboard(currentWheel.id);
-      } catch (error) {
-        console.error('Error saving spin result:', error);
+        localStorage.setItem('spin-sound', on ? 'off' : 'on');
+      } catch {
+        // storage unavailable (private mode); the toggle still works for this visit
       }
-    }
+      return !on;
+    });
   };
 
-  const selectWheel = (wheel) => {
-    setCurrentWheel(wheel);
-    setWheelName(wheel.name);
-    setSelectedResult(null);
-    setEditingWheel(null);
-  };
+  const context = useMemo(
+    () => ({ notify, withPin, ensurePin, version, soundOn }),
+    [notify, withPin, ensurePin, version, soundOn]
+  );
+
+  const closeHelp = useCallback(() => setShowHelp(false), []);
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>Spin The Wheel</h1>
-      </header>
+    <AppContext.Provider value={context}>
+      <div className="app">
+        <header className="header">
+          <div className="brand">
+            <span className="header-logo" aria-hidden="true">🎡</span>
+            <h1>Spin The Wheel</h1>
+          </div>
+          <div className="header-actions">
+            <button type="button" className="icon-btn header-help" onClick={() => setShowHelp(true)} title="Handleiding" aria-label="Handleiding">
+              ?
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={toggleSound}
+              aria-pressed={soundOn}
+              title={soundOn ? 'Geluid uit' : 'Geluid aan'}
+            >
+              {soundOn ? '🔊' : '🔇'}
+            </button>
+          </div>
+        </header>
 
-      <div className="main-content">
-        <aside className="sidebar">
-          <div className="wheel-list-header">
-            <h2>My Wheels</h2>
-          </div>
-          <div className="wheel-list">
-            {wheels.map(wheel => (
-              <div
-                key={wheel.id}
-                className={`wheel-item ${currentWheel?.id === wheel.id ? 'active' : ''}`}
-                onClick={() => selectWheel(wheel)}
-              >
-                <span>{wheel.name}</span>
-                <span className="item-count">({wheel.items.length})</span>
-              </div>
-            ))}
-          </div>
-          <div className="create-wheel">
-            <input
-              type="text"
-              placeholder="New wheel name..."
-              value={wheelName}
-              onChange={(e) => setWheelName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleCreateWheel()}
-            />
-            <button onClick={handleCreateWheel}>Create</button>
-          </div>
-        </aside>
+        <nav className="main-nav" aria-label="Hoofdmenu">
+          <button
+            type="button"
+            className={`nav-btn ${activeTab === 'wheel' ? 'active' : ''}`}
+            onClick={() => setActiveTab('wheel')}
+          >
+            <span className="nav-icon" aria-hidden="true">🎡</span>
+            <span className="nav-label">Wheel</span>
+          </button>
+          <button
+            type="button"
+            className={`nav-btn ${activeTab === 'beerpong' ? 'active' : ''}`}
+            onClick={() => setActiveTab('beerpong')}
+            disabled={isSpinning}
+          >
+            <span className="nav-icon" aria-hidden="true">🍺</span>
+            <span className="nav-label">Beerpong</span>
+          </button>
+          <button type="button" className="nav-btn nav-help" onClick={() => setShowHelp(true)}>
+            <span className="nav-icon" aria-hidden="true">📖</span>
+            <span className="nav-label">Help</span>
+          </button>
+        </nav>
 
         <main className="content">
-          <div className="app-tabs">
-            <button 
-              className={`tab-btn ${activeTab === 'wheel' ? 'active' : ''}`}
-              onClick={() => setActiveTab('wheel')}
-            >
-              🎡 Wheel
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'beerpong' ? 'active' : ''}`}
-              onClick={() => setActiveTab('beerpong')}
-            >
-              🍺 Beerpong
-            </button>
-            <button 
-              className={`tab-btn ${activeTab === 'manual' ? 'active' : ''}`}
-              onClick={() => setActiveTab('manual')}
-            >
-              📖 Handleiding
-            </button>
-          </div>
-
-          {activeTab === 'wheel' ? (
-            currentWheel ? (
-              <>
-                <div className="wheel-header">
-                  <h2>{currentWheel.name}</h2>
-                  {editingWheel !== currentWheel.id && (
-                    <button className="edit-btn" onClick={() => setEditingWheel(currentWheel.id)}>
-                      Edit
-                    </button>
-                  )}
-                  <button className="delete-btn" onClick={() => handleDeleteWheel(currentWheel.id)}>
-                    Delete
-                  </button>
-                </div>
-
-                <div className="wheel-container">
-                  <SpinWheel
-                    items={currentWheel.items}
-                    onSpinEnd={handleSpinResult}
-                    key={currentWheel.id}
-                  />
-                </div>
-
-                {selectedResult && (
-                  <div className="result-modal">
-                    <div className="result-content">
-                      <h3>Winner!</h3>
-                      <p>{selectedResult}</p>
-                      <button onClick={() => setSelectedResult(null)}>Close</button>
-                    </div>
-                  </div>
-                )}
-
-                <ItemList
-                  items={currentWheel.items}
-                  onAdd={handleAddItem}
-                  onRemove={handleRemoveItem}
-                  onEdit={handleEditItem}
-                  newItem={newItem}
-                  setNewItem={setNewItem}
-                />
-
-                <Scoreboard history={history} leaderboard={leaderboard} />
-              </>
-            ) : (
-              <div className="no-wheel">
-                <p>Create or select a wheel to get started!</p>
-              </div>
-            )
-          ) : activeTab === 'beerpong' ? (
-            <BeerpongScoreboard apiBaseUrl={API_BASE_URL} />
-          ) : (
-            <Manual />
-          )}
+          {activeTab === 'wheel'
+            ? <WheelPage onSpinningChange={setIsSpinning} />
+            : <BeerpongScoreboard />}
         </main>
+
+        {showHelp && (
+          <Modal title="📖 Handleiding" onClose={closeHelp} className="help-modal">
+            <Manual />
+          </Modal>
+        )}
+
+        {pinPrompt && (
+          <PinPrompt onDone={(ok) => { pinPrompt(ok); setPinPrompt(null); }} />
+        )}
+
+        <Toasts toasts={toasts} onDismiss={dismissToast} />
       </div>
-    </div>
+    </AppContext.Provider>
   );
 }
 

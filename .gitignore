@@ -1,1 +1,15 @@
 GEMINI.md
+CLAUDE.md
+# Dependencies and builds
+node_modules/
+frontend/build/
+
+# Local settings (APP_PIN, CORS_ORIGIN)
+.env
+
+# Live data: the database and its backups must not be committed.
+# wheels.db is still tracked from earlier commits; untrack it with
+#   git rm --cached backend/wheels.db
+backend/wheels.db
+backend/wheels.db-*
+backend/backups/

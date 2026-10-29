@@ -1,402 +1,127 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { api } from '../api';
+import { useApp, useOnRemoteChange } from '../hooks';
+import { errorMessage } from '../utils';
+import { teamNameFor, scoreProblem } from './beerpong/logic';
+import PlayTab from './beerpong/PlayTab';
+import StandingsTab from './beerpong/StandingsTab';
+import PlayersTab from './beerpong/PlayersTab';
+import HistoryTab from './beerpong/HistoryTab';
 
-function BeerpongScoreboard({ apiBaseUrl }) {
-  const [players, setPlayers] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [matches, setMatches] = useState([]);
-  const [subTab, setSubTab] = useState('players'); // 'players', 'teams', 'matches', 'matchmaker'
+const SUB_TABS = [
+  { id: 'play', label: '🎲 Spelen' },
+  { id: 'standings', label: '🏆 Stand' },
+  { id: 'players', label: '👥 Spelers' },
+  { id: 'history', label: '📜 Historie' }
+];
 
-  // Form states
-  const [newPlayerName, setNewPlayerName] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  const [matchData, setMatchData] = useState({
-    team_a_id: '',
-    team_b_id: '',
-    score_a: 0,
-    score_b: 0
-  });
+const EMPTY = { players: [], teams: [], matches: [], sessions: [], queue: null, tournament: null };
 
-  // Matchmaker state
-  const [mmSideA, setMmSideA] = useState({ p1: '', p2: '' });
-  const [mmSideB, setMmSideB] = useState({ p1: '', p2: '' });
-  const [mmResult, setMmResult] = useState(null);
+// Loads all beerpong data, keeps it live, and hands shared actions to the sub-tabs
+function BeerpongScoreboard() {
+  const { notify, version } = useApp();
+  const [data, setData] = useState(EMPTY);
+  const [loaded, setLoaded] = useState(false);
+  const [subTab, setSubTab] = useState('play');
+
+  const refresh = useCallback(async () => {
+    try {
+      const [players, teams, matches, sessions, queue, tournament] = await Promise.all([
+        api.get('/api/players'),
+        api.get('/api/teams'),
+        api.get('/api/matches'),
+        api.get('/api/sessions'),
+        api.get('/api/state/queue'),
+        api.get('/api/state/tournament')
+      ]);
+      setData({
+        players: players.data,
+        teams: teams.data,
+        matches: matches.data,
+        sessions: sessions.data,
+        queue: queue.data.value,
+        tournament: tournament.data.value
+      });
+    } catch (error) {
+      notify('Kon de beerpong-gegevens niet laden: ' + errorMessage(error));
+    } finally {
+      setLoaded(true);
+    }
+  }, [notify]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    refresh();
+  }, [refresh]);
 
-  const fetchData = async () => {
-    try {
-      const [pRes, tRes, mRes] = await Promise.all([
-        axios.get(`${apiBaseUrl}/api/players`),
-        axios.get(`${apiBaseUrl}/api/teams`),
-        axios.get(`${apiBaseUrl}/api/matches`)
-      ]);
-      setPlayers(pRes.data);
-      setTeams(tRes.data);
-      setMatches(mRes.data);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    }
-  };
+  useOnRemoteChange(version, refresh);
 
-  const handleAddPlayer = async () => {
-    if (!newPlayerName.trim()) return;
-    try {
-      await axios.post(`${apiBaseUrl}/api/players`, { name: newPlayerName });
-      setNewPlayerName('');
-      fetchData();
-    } catch (error) {
-      alert(error.response?.data?.error || 'Error adding player');
-    }
-  };
+  // Find-or-create the duo for these player ids (the server re-links its players)
+  const ensureTeam = useCallback(async (playerIds) => {
+    const members = playerIds.map(id => data.players.find(p => p.id === Number(id)));
+    if (members.some(p => !p)) throw new Error('Een van de spelers bestaat niet meer');
+    const res = await api.post('/api/teams', {
+      name: teamNameFor(members),
+      player_ids: members.map(p => p.id).sort((a, b) => a - b)
+    });
+    return res.data;
+  }, [data.players]);
 
-  const togglePresence = async (id, currentStatus) => {
-    try {
-      const newStatus = !currentStatus;
-      setPlayers(players.map(p => p.id === id ? { ...p, is_present: newStatus ? 1 : 0 } : p));
-      await axios.post(`${apiBaseUrl}/api/players/${id}/toggle-presence`, { is_present: newStatus });
-    } catch (error) {
-      console.error('Fout bij updaten aanwezigheid:', error);
-      fetchData();
-    }
-  };
-
-  const handleDeletePlayer = async (id) => {
-    if (!window.confirm('Weet je zeker dat je deze speler wilt verwijderen?')) return;
-    try {
-      await axios.post(`${apiBaseUrl}/api/players/${id}/delete`);
-      fetchData();
-    } catch (error) {
-      alert('Fout bij verwijderen speler: ' + error.message);
-      fetchData();
-    }
-  };
-
-  const handleDeleteTeam = async (id) => {
-    if (!window.confirm('Weet je zeker dat je dit team wilt verwijderen?')) return;
-    try {
-      await axios.post(`${apiBaseUrl}/api/teams/${id}/delete`);
-      fetchData();
-    } catch (error) {
-      alert('Fout bij verwijderen team: ' + error.message);
-      fetchData();
-    }
-  };
-
-  const handleDeleteMatch = async (id) => {
-    if (!window.confirm('Weet je zeker dat je deze wedstrijd wilt verwijderen?')) return;
-    try {
-      await axios.post(`${apiBaseUrl}/api/matches/${id}/delete`);
-      fetchData();
-    } catch (error) {
-      alert('Fout bij verwijderen wedstrijd: ' + error.message);
-      fetchData();
-    }
-  };
-
-  const findOrCreateTeam = async (playerIds, currentTeams, currentPlayers) => {
-    const sortedIds = [...playerIds].map(id => parseInt(id)).sort((a, b) => a - b);
-    const pNames = currentPlayers
-      .filter(p => sortedIds.includes(parseInt(p.id)))
-      .map(p => p.name)
-      .sort();
-    
-    if (pNames.length !== playerIds.length) {
-      console.error('Niet alle spelers gevonden in de lijst:', { sortedIds, currentPlayers });
+  // Returns { id, winner_id } or null when it was not saved
+  const recordMatch = useCallback(async (teamAId, teamBId, scoreA, scoreB) => {
+    const problem = teamAId === teamBId ? 'Kies twee verschillende teams' : scoreProblem(scoreA, scoreB);
+    if (problem) {
+      notify(problem);
       return null;
     }
-
-    const teamName = pNames.join(' & ');
-    
-    // Check in de meegegeven teams lijst
-    const existingTeam = currentTeams.find(t => t.name === teamName);
-    if (existingTeam) return existingTeam.id;
-
     try {
-      const res = await axios.post(`${apiBaseUrl}/api/teams`, { 
-        name: teamName, 
-        player_ids: sortedIds 
-      });
-      return res.data.id;
+      const res = await api.post('/api/matches', { team_a_id: teamAId, team_b_id: teamBId, score_a: scoreA, score_b: scoreB });
+      await refresh();
+      return res.data;
     } catch (error) {
-      console.error('Error creating team:', error);
-      // Als het team al bestaat in de DB (race condition)
-      const tRes = await axios.get(`${apiBaseUrl}/api/teams`);
-      const retryTeam = tRes.data.find(t => t.name === teamName);
-      return retryTeam ? retryTeam.id : null;
+      notify('Fout bij opslaan match: ' + errorMessage(error));
+      return null;
     }
-  };
+  }, [notify, refresh]);
 
-  const handleRecordMatch = async (customData) => {
-    const data = customData || matchData;
-    const { team_a_id, team_b_id, score_a, score_b } = data;
-    
-    if (!team_a_id || !team_b_id || team_a_id === team_b_id) {
-      alert('Selecteer twee verschillende teams');
-      return;
-    }
-
-    const winner_id = score_a > score_b ? team_a_id : team_b_id;
+  // Shared queue/tournament documents: optimistic locally, then saved for everyone
+  const saveState = useCallback(async (key, value) => {
+    setData(current => ({ ...current, [key]: value }));
     try {
-      setIsSubmitting(true);
-      await axios.post(`${apiBaseUrl}/api/matches`, { ...data, winner_id });
-      setMatchData({ team_a_id: '', team_b_id: '', score_a: 0, score_b: 0 });
-      setMmResult(null);
-      await fetchData();
-      setSubTab('matches');
+      await api.put(`/api/state/${key}`, { value });
     } catch (error) {
-      alert('Fout bij opslaan match: ' + (error.response?.data?.error || error.message));
-    } finally {
-      setIsSubmitting(false);
+      notify('Kon niet opslaan: ' + errorMessage(error));
+      refresh();
     }
-  };
+  }, [notify, refresh]);
 
-  const handleMatchmakerSubmit = async () => {
-    const pIdsA = [parseInt(mmSideA.p1), parseInt(mmSideA.p2)].filter(id => !isNaN(id));
-    const pIdsB = [parseInt(mmSideB.p1), parseInt(mmSideB.p2)].filter(id => !isNaN(id));
+  const shared = useMemo(
+    () => ({ ...data, refresh, ensureTeam, recordMatch, saveState }),
+    [data, refresh, ensureTeam, recordMatch, saveState]
+  );
 
-    if (pIdsA.length < 2 || pIdsB.length < 2) {
-      alert('Kies 2 spelers per kant');
-      return;
-    }
-
-    const allIds = [...pIdsA, ...pIdsB];
-    if (new Set(allIds).size !== 4) {
-      alert('Een speler kan niet twee keer meedoen!');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      
-      // Haal de allernieuwste data op voor spelers en teams
-      const [pRes, tRes] = await Promise.all([
-        axios.get(`${apiBaseUrl}/api/players`),
-        axios.get(`${apiBaseUrl}/api/teams`)
-      ]);
-      
-      const currentPlayers = pRes.data;
-      const currentTeams = tRes.data;
-      
-      setPlayers(currentPlayers);
-      setTeams(currentTeams);
-
-      const teamAId = await findOrCreateTeam(pIdsA, currentTeams, currentPlayers);
-      const teamBId = await findOrCreateTeam(pIdsB, currentTeams, currentPlayers);
-
-      if (teamAId && teamBId) {
-        // Update teams state nog een keer voor de zekerheid
-        const finalTRes = await axios.get(`${apiBaseUrl}/api/teams`);
-        setTeams(finalTRes.data);
-        setMmResult({ teamAId, teamBId, scoreA: 0, scoreB: 0 });
-      } else {
-        alert('Kon teams niet vinden of aanmaken. Controleer of de geselecteerde spelers nog bestaan.');
-      }
-    } catch (error) {
-      console.error('Matchmaker submit error:', error);
-      alert('Er ging iets mis bij het starten van de match.');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleMmSave = async () => {
-    await handleRecordMatch({
-      team_a_id: mmResult.teamAId,
-      team_b_id: mmResult.teamBId,
-      score_a: mmResult.scoreA,
-      score_b: mmResult.scoreB
-    });
-  };
-
-  const shuffleSelected = () => {
-    const presentPlayers = players.filter(p => p.is_present);
-    if (presentPlayers.length < 4) {
-      alert('Niet genoeg spelers aanwezig om te husselen (minimaal 4)!');
-      return;
-    }
-    const shuffled = [...presentPlayers].sort(() => 0.5 - Math.random());
-    setMmSideA({ p1: shuffled[0].id, p2: shuffled[1].id });
-    setMmSideB({ p1: shuffled[2].id, p2: shuffled[3].id });
-  };
-
-  const presentPlayers = players.filter(p => p.is_present);
+  const present = data.players.filter(p => p.is_present).length;
 
   return (
     <div className="beerpong-container">
-      <div className="beerpong-subtabs">
-        <button className={subTab === 'players' ? 'active' : ''} onClick={() => setSubTab('players')}>Players</button>
-        <button className={subTab === 'teams' ? 'active' : ''} onClick={() => setSubTab('teams')}>Teams</button>
-        <button className={subTab === 'matches' ? 'active' : ''} onClick={() => setSubTab('matches')}>History</button>
-        <button className={subTab === 'matchmaker' ? 'active' : ''} onClick={() => setSubTab('matchmaker')}>🎲 Matchmaker</button>
+      <div className="beerpong-subtabs" role="tablist">
+        {SUB_TABS.map(t => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={subTab === t.id}
+            className={subTab === t.id ? 'active' : ''}
+            onClick={() => setSubTab(t.id)}
+          >
+            {t.label}
+            {t.id === 'players' && loaded && <span className="tab-badge">{present}</span>}
+          </button>
+        ))}
       </div>
 
-      {subTab === 'players' && (
-        <div className="bp-section">
-          <h3>Individual Players</h3>
-          <div className="add-form">
-            <input 
-              type="text" 
-              placeholder="Player name..." 
-              value={newPlayerName}
-              onChange={(e) => setNewPlayerName(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleAddPlayer()}
-            />
-            <button onClick={handleAddPlayer}>Add</button>
-          </div>
-          <table className="bp-table">
-            <thead>
-              <tr><th>Hier?</th><th>Name</th><th>Wins</th><th>Wissen</th></tr>
-            </thead>
-            <tbody>
-              {players.map((p, i) => (
-                <tr key={p.id} className={!p.is_present ? 'absent-row' : ''}>
-                  <td>
-                    <input 
-                      type="checkbox" 
-                      checked={!!p.is_present} 
-                      onChange={() => togglePresence(p.id, p.is_present)}
-                    />
-                  </td>
-                  <td>{p.name} {!p.is_present && '(Afwezig)'}</td>
-                  <td>{p.wins}</td>
-                  <td><button type="button" className="del-btn-small" onClick={() => handleDeletePlayer(p.id)}>×</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {subTab === 'teams' && (
-        <div className="bp-section">
-          <h3>Teams</h3>
-          <table className="bp-table">
-            <thead>
-              <tr><th>Rank</th><th>Team</th><th>Members</th><th>Wins</th><th>Wissen</th></tr>
-            </thead>
-            <tbody>
-              {teams.map((t, i) => (
-                <tr key={t.id}>
-                  <td>{i+1}</td>
-                  <td>{t.name}</td>
-                  <td>{t.members}</td>
-                  <td>{t.wins}</td>
-                  <td><button type="button" className="del-btn-small" onClick={() => handleDeleteTeam(t.id)}>×</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {subTab === 'matches' && (
-        <div className="bp-section">
-          <h3>History</h3>
-          <div className="record-match-form">
-            <div className="match-row">
-              <select value={matchData.team_a_id} onChange={(e) => setMatchData({...matchData, team_a_id: e.target.value})}>
-                <option value="">Select Team A</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-              <input type="number" value={matchData.score_a} onChange={(e) => setMatchData({...matchData, score_a: parseInt(e.target.value)})}/>
-              <span>VS</span>
-              <input type="number" value={matchData.score_b} onChange={(e) => setMatchData({...matchData, score_b: parseInt(e.target.value)})}/>
-              <select value={matchData.team_b_id} onChange={(e) => setMatchData({...matchData, team_b_id: e.target.value})}>
-                <option value="">Select Team B</option>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-              </select>
-            </div>
-            <button className="full-width-btn" onClick={() => handleRecordMatch()} disabled={isSubmitting}>
-              {isSubmitting ? 'Bezig...' : 'Record Match'}
-            </button>
-          </div>
-
-          <div className="match-history-list">
-            {matches.map(m => (
-              <div key={m.id} className="match-card">
-                <div className="match-header-row">
-                  <div className="match-date">{new Date(m.created_at).toLocaleDateString()}</div>
-                  <button type="button" className="del-btn-small" onClick={() => handleDeleteMatch(m.id)}>×</button>
-                </div>
-                <div className="match-main">
-                  <span className={m.winner_id === m.team_a_id ? 'winner' : ''}>{m.team_a_name}</span>
-                  <span className="score">{m.score_a} - {m.score_b}</span>
-                  <span className={m.winner_id === m.team_b_id ? 'winner' : ''}>{m.team_b_name}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {subTab === 'matchmaker' && (
-        <div className="bp-section">
-          <h3>🎲 Matchmaker</h3>
-          {!mmResult ? (
-            <div className="mm-setup">
-              <div className="mm-grid">
-                <div className="mm-column">
-                  <h4>Side A</h4>
-                  <select value={mmSideA.p1} onChange={(e) => setMmSideA({...mmSideA, p1: e.target.value})}>
-                    <option value="">Player 1</option>
-                    {presentPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <select value={mmSideA.p2} onChange={(e) => setMmSideA({...mmSideA, p2: e.target.value})}>
-                    <option value="">Player 2</option>
-                    {presentPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-                <div className="vs-divider">VS</div>
-                <div className="mm-column">
-                  <h4>Side B</h4>
-                  <select value={mmSideB.p1} onChange={(e) => setMmSideB({...mmSideB, p1: e.target.value})}>
-                    <option value="">Player 3</option>
-                    {presentPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                  <select value={mmSideB.p2} onChange={(e) => setMmSideB({...mmSideB, p2: e.target.value})}>
-                    <option value="">Player 4</option>
-                    {presentPlayers.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="mm-actions">
-                <button className="full-width-btn" onClick={handleMatchmakerSubmit} disabled={isSubmitting}>
-                  {isSubmitting ? 'Bezig...' : 'Start Match'}
-                </button>
-                <button className="outline-btn" onClick={shuffleSelected} style={{marginTop: '10px'}} disabled={isSubmitting}>🎲 Random Shuffle 4 present players</button>
-              </div>
-            </div>
-          ) : (
-            <div className="draw-result">
-               <div className="versus-display">
-                  <div className="vs-team">
-                    <h4>{teams.find(t => t.id === mmResult.teamAId)?.name}</h4>
-                  </div>
-                  <div className="vs-divider">VS</div>
-                  <div className="vs-team">
-                    <h4>{teams.find(t => t.id === mmResult.teamBId)?.name}</h4>
-                  </div>
-                </div>
-                <div className="quick-score-form">
-                  <h4>Enter Final Score:</h4>
-                  <div className="match-row">
-                    <input type="number" value={mmResult.scoreA} onChange={(e) => setMmResult({...mmResult, scoreA: parseInt(e.target.value)})}/>
-                    <span>-</span>
-                    <input type="number" value={mmResult.scoreB} onChange={(e) => setMmResult({...mmResult, scoreB: parseInt(e.target.value)})}/>
-                  </div>
-                  <button className="full-width-btn" onClick={handleMmSave} disabled={isSubmitting}>
-                    {isSubmitting ? 'Opslaan...' : 'Save & Finish'}
-                  </button>
-                  <button className="outline-btn" style={{marginTop: '10px'}} onClick={() => setMmResult(null)} disabled={isSubmitting}>Cancel</button>
-                </div>
-            </div>
-          )}
-        </div>
-      )}
+      {subTab === 'play' && <PlayTab {...shared} goTo={setSubTab} />}
+      {subTab === 'standings' && <StandingsTab {...shared} />}
+      {subTab === 'players' && <PlayersTab {...shared} />}
+      {subTab === 'history' && <HistoryTab {...shared} />}
     </div>
   );
 }

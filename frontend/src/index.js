@@ -9,3 +9,11 @@ root.render(
     <App />
   </React.StrictMode>
 );
+
+// Installable app / offline shell. Only in production builds: in development the
+// service worker would cache the dev server's bundle and hide your changes.
+if (process.env.NODE_ENV === 'production' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+  });
+}

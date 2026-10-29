@@ -11,7 +11,12 @@ services:
       context: .
       dockerfile: Dockerfile.backend
     network_mode: host
+    environment:
+      # Set these in a .env file next to this one (see README)
+      - APP_PIN=${APP_PIN:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
     volumes:
+      # The database (wheels.db) and its daily backups (backups/) live in ./backend on the host
       - ./backend:/app
       - /app/node_modules
     restart: unless-stopped
